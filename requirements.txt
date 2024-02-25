@@ -1,0 +1,10 @@
+spacy
+nltk
+scipy
+torch
+datasets
+transformers
+tokenizers
+accelerate
+simcse
+wandb
