@@ -1,6 +1,6 @@
 Code for **Token-Specific Watermarking with Enhanced Detectability and Semantic Coherence for Large Language Models**.
 
-Check ArXiv paper [here]().
+Check ArXiv paper [here](https://arxiv.org/abs/2402.18059).
 
 ## Environment Setup
 * Our code follows the setup of [KGW](https://github.com/jwkirchenbauer/lm-watermarking/tree/main/). 
@@ -66,8 +66,3 @@ Check ArXiv paper [here]().
 * Figure 4: [pos_tag/delta_gamma_analysis.ipynb](pos_tag/delta_gamma_analysis.ipynb)
 * Figure 5: [dipper/result.ipynb](dipper/result.ipynb)
 * Figure 6: [cp_att/result.ipynb](cp_att/result.ipynb)
-
-## Citation
-```
-
-```
