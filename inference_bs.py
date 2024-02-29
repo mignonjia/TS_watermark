@@ -62,7 +62,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 term_width = 80
 
-# init_delta_25 = [0.8, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.0, 2.3, 2.5, 3.0]
+# init_delta_25 = [0.8, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.0, 2.3, 2.4, 2.5, 2.7, 2.9， 3.0]
 # init_delta_1 = [1.3, 1.5, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.5, 3.0] 
 # init_delta_5 = [0.8, 1.0, 1.3, 1.5, 1.7, 2.0, 2.3, 3.0]
 
@@ -448,10 +448,10 @@ def main(args):
             cur_result['wm_bs']['ppl'] = math.exp(statistics.mean(ppl_list['wm_bs']))
 
             json_result['setting_'+str(setting)] = cur_result
-            embed_out[args.length][args.use_sampling] = embed_no_wm_list
+            embed_out[args.length]['multi' if args.use_sampling else 'greedy'] = embed_no_wm_list
     
-        if inc == 0:
-            torch.save(embed_out, f'eval/no_wm_gen_embedding/embed_{args.split}_half.pt')
+        # if inc == 0:
+        #     torch.save(embed_out, f'eval/no_wm_gen_embedding/embed_{args.split}_half.pt')
 
         with open(f"eval/opt/bs_{args.split}/half/{args.gamma}_{args.delta}.json", "w") as outfile:
             outfile.write(json.dumps(json_result, indent=4))

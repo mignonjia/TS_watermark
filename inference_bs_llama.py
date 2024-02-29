@@ -458,10 +458,10 @@ def main(args):
             print("simcse", cur_result['wm_bs']['simcse'])
 
             json_result['setting_'+str(setting)] = cur_result
-            embed_out[args.length][args.use_sampling] = embed_no_wm_list
+            embed_out[args.length]['multi' if args.use_sampling else 'greedy'] = embed_no_wm_list
             
-        if inc == 0:
-            torch.save(embed_out, f'eval/no_wm_gen_embedding/embed_{args.split}_half_llama.pt')
+        # if inc == 0:
+        #     torch.save(embed_out, f'eval/no_wm_gen_embedding/embed_{args.split}_half_llama.pt')
             
         with open(f"eval/llama/bs_{args.split}/{args.gamma}_{args.delta}_llama.json", "w") as outfile:
             outfile.write(json.dumps(json_result, indent=4))

@@ -1,4 +1,6 @@
-Code for **Token-Specific Watermarking with Enhanced Detectability and Semantic Coherence for Large Language Models**
+Code for **Token-Specific Watermarking with Enhanced Detectability and Semantic Coherence for Large Language Models**.
+
+Check ArXiv paper [here]().
 
 ## Environment Setup
 * Our code follows the setup of [KGW](https://github.com/jwkirchenbauer/lm-watermarking/tree/main/). 
@@ -40,7 +42,7 @@ Code for **Token-Specific Watermarking with Enhanced Detectability and Semantic 
   Evaluation on the paraphase text
 * Ours
   * `CUDA_VISIBLE_DEVICES=0 python inference_dipper_get_text.py --split=test --batch_size=20`
-  Get baseline generation text
+  Get generation text using our watermarking method
   * Then use [Dipper](https://github.com/martiansideofthemoon/ai-detection-paraphrases0) to get paraphrase text
   * `CUDA_VISIBLE_DEVICES=0 python inference_dipper_text_eval.py --split=test --batch_size=20`
   Evaluation on the paraphase text
@@ -65,4 +67,7 @@ Code for **Token-Specific Watermarking with Enhanced Detectability and Semantic 
 * Figure 5: [dipper/result.ipynb](dipper/result.ipynb)
 * Figure 6: [cp_att/result.ipynb](cp_att/result.ipynb)
 
+## Citation
+```
 
+```

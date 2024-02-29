@@ -274,6 +274,7 @@ def main(args):
     # Record all the L_S and L_D during training for analysis
     L_S_list, L_D_list = [], [] # empty after 1 epoch
     L_S_list_100, L_D_list_100 = [], [] # empty after 100 steps
+    step_cnter = 0
 
     for epoch in range(args.epochs):
 
@@ -377,7 +378,7 @@ def main(args):
                 if args.method == "Pareto":
                     log_dict["factor"] = factor
                 run.log(log_dict, step=step_cnter) 
-                step_cnter += 1
+            step_cnter += 1
             
             if step_cnter % 100 == 0: 
                 
