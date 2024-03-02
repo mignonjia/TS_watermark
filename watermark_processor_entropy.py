@@ -81,7 +81,6 @@ class WatermarkBase:
         self.gamma_list = torch.empty(0, dtype=torch.float).cuda()
         self.delta_list = torch.empty(0, dtype=torch.float).cuda()
         self.embed_matrix = embed_matrix
-        self.entropy_list = torch.empty(0, dtype=torch.float).cuda()
 
     def _seed_rng(self, input_ids: torch.LongTensor, seeding_scheme: str = None) -> None:
         # can optionally override the seeding scheme,
@@ -137,14 +136,12 @@ class WatermarkLogitsProcessor(WatermarkBase, LogitsProcessor):
 
         raw_probs = torch.softmax(scores, dim=-1)  # batch_size, vocab_size
         ent = -torch.where(raw_probs > 0, raw_probs * raw_probs.log(), raw_probs.new([0.0])).sum(dim=-1)
-        # print(ent, ent.shape)
+        
         for b_idx in range(input_ids.shape[0]):
             if ent[b_idx] > 2.33:
                 greenlist_ids, gamma, delta = self._get_greenlist_ids(input_ids[b_idx])
                 green_tokens_mask = self._calc_greenlist_mask(logits=scores[b_idx], greenlist_token_ids=greenlist_ids)
                 scores[b_idx][green_tokens_mask] = scores[b_idx][green_tokens_mask] + delta.half()
-            # if b_idx == 19:
-            self.entropy_list = torch.cat([self.entropy_list, ent[b_idx].unsqueeze(0)])
         
         return scores
 
@@ -153,8 +150,6 @@ class WatermarkDetector(WatermarkBase):
     def __init__(
         self,
         *args,
-        entropy: list[float] = None,
-        entropy_threshold: float = None,
         device: torch.device = None,
         tokenizer: Tokenizer = None,
         z_threshold: float = 4.0,
@@ -171,8 +166,6 @@ class WatermarkDetector(WatermarkBase):
         self.device = device
         self.z_threshold = z_threshold
         self.rng = torch.Generator(device=self.device)
-        self.entropy = entropy
-        self.entropy_threshold = entropy_threshold
 
         if self.seeding_scheme == "simple_1":
             self.min_prefix_len = 1
@@ -189,14 +182,13 @@ class WatermarkDetector(WatermarkBase):
 
     def _compute_z_score(self, observed_count, T):
         # count refers to number of green tokens, T is total number of tokens
-        gamma = self.gamma.item()
-        var = gamma * (1 - gamma) * T
-        mean = gamma * T
-        z = (observed_count - mean)/sqrt(var)            
+        var = torch.sum(self.gamma_list * (1 - self.gamma_list))
+        mean = torch.sum(self.gamma_list)
+        z = (observed_count - mean)/torch.sqrt(var)            
         return z
 
     def _compute_p_value(self, z):
-        p_value = scipy.stats.norm.sf(z)
+        p_value = scipy.stats.norm.sf(z.cpu())
         return p_value
 
     def _score_sequence(
@@ -226,15 +218,14 @@ class WatermarkDetector(WatermarkBase):
                 bigram_table[bigram] = True if bigram[1] in greenlist_ids else False
             green_token_count = sum(bigram_table.values())
         else:
-            num_tokens_scored = 0 # Initialize with 0, and update during detection
-
-            # if num_tokens_scored < 1:
-            #     raise ValueError(
-            #         (
-            #             f"Must have at least {1} token to score after "
-            #             f"the first min_prefix_len={self.min_prefix_len} tokens required by the seeding scheme."
-            #         )
-            #     )
+            num_tokens_scored = len(input_ids) - self.min_prefix_len
+            if num_tokens_scored < 1:
+                raise ValueError(
+                    (
+                        f"Must have at least {1} token to score after "
+                        f"the first min_prefix_len={self.min_prefix_len} tokens required by the seeding scheme."
+                    )
+                )
             # Standard method.
             # Since we generally need at least 1 token (for the simplest scheme)
             # we start the iteration over the token sequence with a minimum
@@ -247,13 +238,9 @@ class WatermarkDetector(WatermarkBase):
                 greenlist_ids, gamma, delta = self._get_greenlist_ids(input_ids[:idx])
                 # print(input_ids, curr_token, greenlist_ids)
                 # exit()
-                if self.entropy[idx] > self.entropy_threshold:
-                    num_tokens_scored += 1 # Get num of tokens with high entropy
-                    if curr_token in greenlist_ids:
-                        green_token_count += 1 # Get num of green tokens 
-                        green_token_mask.append(True)
-                    else:
-                        green_token_mask.append(False)
+                if curr_token in greenlist_ids:
+                    green_token_count += 1
+                    green_token_mask.append(True)
                 else:
                     green_token_mask.append(False)
 
@@ -279,7 +266,7 @@ class WatermarkDetector(WatermarkBase):
     def detect(
         self,
         text: str = None,
-        tokenized_text: torch.LongTensor = None,
+        tokenized_text: list[int] = None,
         return_prediction: bool = True,
         return_scores: bool = True,
         z_threshold: float = None,

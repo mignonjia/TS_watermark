@@ -47,7 +47,7 @@ from utils.submitit import str2bool
 from utils.io import write_jsonlines, write_json
 
 # watermarking functionality
-from watermark_processor_sweet import WatermarkLogitsProcessor, WatermarkDetector
+from watermark_processor_entropy import WatermarkLogitsProcessor, WatermarkDetector
 
 # generation pipeline helpers
 from utils.generation import (
@@ -106,7 +106,7 @@ def list_format_scores(score_dict, detection_threshold):
         lst_2d.insert(-1,["z-score Threshold", f"{detection_threshold}"])
     return lst_2d
 
-def detect(input_text, args, entropy=None, entropy_threshold=None, embed_matrix=None, device=None, tokenizer=None, use_ckpt=True, gamma=None, delta=None):
+def detect(input_text, args, embed_matrix=None, device=None, tokenizer=None, use_ckpt=True, gamma=None, delta=None):
     """Instantiate the WatermarkDetection object and call detect on
         the input text returning the scores and outcome of the test"""
     watermark_detector = WatermarkDetector(vocab=list(tokenizer.get_vocab().values()),
@@ -115,15 +115,13 @@ def detect(input_text, args, entropy=None, entropy_threshold=None, embed_matrix=
                                         device=device,
                                         tokenizer=tokenizer,
                                         normalizers=args.normalizers,
-                                        entropy=entropy,
-                                        entropy_threshold=entropy_threshold,
                                         embed_matrix=embed_matrix,
                                         ignore_repeated_bigrams=args.ignore_repeated_bigrams,
                                         use_ckpt=use_ckpt,
                                         gamma=gamma,
                                         delta=delta)
     if len(input_text)-1 > watermark_detector.min_prefix_len:
-        score_dict = watermark_detector.detect(tokenized_text=input_text)
+        score_dict = watermark_detector.detect(input_text)
         # output = str_format_scores(score_dict, watermark_detector.z_threshold)
         output = list_format_scores(score_dict, watermark_detector.z_threshold)
     else:
@@ -190,7 +188,7 @@ def main(args):
         ['short', False, 1.0],
         ['mid', True, 1.0],
         ['mid', False, 1.0]]
-    
+
     if args.load_fp16:
         embed_loaded = torch.load(f'eval/no_wm_gen_embedding/embed_{args.split}_half.pt')
     else: 
@@ -199,7 +197,7 @@ def main(args):
     for inc in range(len(init_gamma_list)):
         args.gamma = init_gamma_list[inc]
         args.delta = init_delta_list[inc]
-        # human_json = json.load(open(f"eval/opt/bs_{args.split}/human/{args.gamma}.json"))
+        human_json = json.load(open(f"eval/opt/bs_{args.split}/human/{args.gamma}.json"))
         json_result = {
             "c4": args.dataset_split,
             "split": args.split,
@@ -334,17 +332,16 @@ def main(args):
             ppl_list = {'wm':[], 'wm_bs':[]}
             term_width = 80
             z_score_att_list = {'wm':[], 'wm_bs':[]}
+            # embed_no_wm_list = torch.empty((0, 768), dtype=torch.float).to(device)
+            # all_ents = []
 
-            all_ents = []
-
-            # # Decide mean entropy of human text: 2.33
-            # #############################################
+            # Decide mean of human text entropy: 2.36
             # for step, batch in enumerate(loader):
             #     if step % 5 == 0:
             #         print(step)
             #     human_ids = torch.cat([t[:,-args.max_new_tokens:] for t in batch['untruncated_inputs']]).to(model.device)
             #     input_ids = batch['input_ids'].to(model.device)
-            #     full_ids = torch.cat((input_ids, human_ids), dim=1)
+            #     full_ids = torch.cat((human_ids, input_ids), dim=1)
             #     if step == 0:
             #         print(input_ids.shape, human_ids.shape, full_ids.shape)
             #     attention_masks = (input_ids != tokenizer.pad_token_id).long()
@@ -359,183 +356,119 @@ def main(args):
             #     all_ents.append(torch.mean(entropy[:, prefix_len:]).item())    
             #     ########### Detection ###########
                 
-            #     print(statistics.mean(all_ents))
-            #     print(all_ents)
-            # #############################################
-
-            skip_cnt = 0
+            # print(statistics.mean(all_ents))
+            # print(all_ents)
+            
             for step, batch in enumerate(loader):
                 if step % 5 == 0:
                     print(step)
                 human = batch['baseline_completion']
                 input_ids = batch['input_ids'].to(model.device)
-                human_ids = torch.cat([t[:,-args.max_new_tokens:] for t in batch['untruncated_inputs']]).to(model.device)
-                human_full_ids = torch.cat((human_ids, input_ids), dim=1)
-  
                 attention_masks = (input_ids != tokenizer.pad_token_id).long()
+                
+                # full_ids = prompt['untruncated_inputs'].to(device) 
                 prefix_len = input_ids.shape[1]
-
-
-                ######### Generation ##########
-                        
-                if not args.human:
-                    watermark_processor_bs = WatermarkLogitsProcessor(vocab=list(tokenizer.get_vocab().values()),
-                                                            ckpt_path=args.ckpt_path,
-                                                            seeding_scheme=args.seeding_scheme,
-                                                            embed_matrix = embed_matrix,
-                                                            use_ckpt = False,
-                                                            gamma = args.gamma,
-                                                            delta = args.delta)
-                    
-                    ######## By setting max_new_tokens = min_new_tokens, we control the output of samples to always be args.max_new_tokens
-                    
-                    if args.use_sampling:
-                        sample = dict(
-                            do_sample=True,
-                            top_k=args.top_k,
-                            temperature=args.sampling_temp,
-                            attention_mask=attention_masks,
-                            min_new_tokens=args.max_new_tokens,
-                            max_new_tokens=args.max_new_tokens
-                        )
-                    else:
-                        sample = dict(
-                            num_beams=args.num_beams,
-                            do_sample=False,
-                            attention_mask=attention_masks,
-                            min_new_tokens=args.max_new_tokens,
-                            max_new_tokens=args.max_new_tokens
-                        )
-                    with torch.no_grad():
-                        with autocast():
-                            torch.manual_seed(hash_key) 
-                            output_w_wm_bs = model.generate(input_ids, 
-                                            **sample,
-                                            logits_processor=LogitsProcessorList([watermark_processor_bs]))
-
-                            tokd_labels = output_w_wm_bs.clone().detach()
-                            attention_masks = (output_w_wm_bs != tokenizer.pad_token_id).long()
-                            tokd_labels[:,:prefix_len+1] = -100 
-                            output = model_ppl(output_w_wm_bs, attention_mask=attention_masks, labels=tokd_labels).loss
-                            ppl_list['wm_bs'].append(torch.mean(output).item())
-
-                            attention_masks = torch.ones_like(output_w_wm_bs[:, (prefix_len-5):]) # should all be 1, since we set the new_token = 200
-                            embed_wm_bs = model_simcse(output_w_wm_bs[:, (prefix_len-5):], attention_mask=attention_masks, output_hidden_states=True, return_dict=True).pooler_output
-                            embed_no_wm = embed_no_wm_list[step*args.batch_size:(step+1)*args.batch_size]
-                            cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
-                           
-                        # Get entropy of watermarked text
-                        attention_masks = (output_w_wm_bs != tokenizer.pad_token_id).long()
-                        output_wm = model(output_w_wm_bs, attention_mask=attention_masks, return_dict=True)
-                        probs = torch.softmax(output_wm.logits, dim=-1)
-                        entropy_wm = -torch.where(probs > 0, probs * probs.log(), probs.new([0.0])).sum(dim=-1)
-                        entropy_wm = entropy_wm[:, -200:].cpu().tolist()
+                
+                watermark_processor_bs = WatermarkLogitsProcessor(vocab=list(tokenizer.get_vocab().values()),
+                                                        ckpt_path=args.ckpt_path,
+                                                        seeding_scheme=args.seeding_scheme,
+                                                        embed_matrix = embed_matrix,
+                                                        use_ckpt = False,
+                                                        gamma = args.gamma,
+                                                        delta = args.delta)
+                
+                ########## By setting max_new_tokens = min_new_tokens, we control the output of samples to always be args.max_new_tokens
+                
+                if args.use_sampling:
+                    sample = dict(
+                        do_sample=True,
+                        top_k=args.top_k,
+                        temperature=args.sampling_temp,
+                        attention_mask=attention_masks,
+                        min_new_tokens=args.max_new_tokens,
+                        max_new_tokens=args.max_new_tokens
+                    )
                 else:
-                    with torch.no_grad():
-                        # Generate entropy for human-written text
-                        attention_masks = (human_full_ids != tokenizer.pad_token_id).long()
-                        output_human = model(human_full_ids, attention_mask=attention_masks, return_dict=True)
-                        probs = torch.softmax(output_human.logits, dim=-1)
-                        entropy_human = -torch.where(probs > 0, probs * probs.log(), probs.new([0.0])).sum(dim=-1)
-                        entropy_human = entropy_human[:, -200:].cpu().tolist()
-  
+                    sample = dict(
+                        num_beams=args.num_beams,
+                        do_sample=False,
+                        attention_mask=attention_masks,
+                        min_new_tokens=args.max_new_tokens,
+                        max_new_tokens=args.max_new_tokens
+                    )
+
+                ########## Generation ##########
+                    
+                with torch.no_grad():
+                    with autocast():
+                        torch.manual_seed(hash_key) 
+                        output_w_wm_bs = model.generate(input_ids, 
+                                        **sample,
+                                        logits_processor=LogitsProcessorList([watermark_processor_bs]))
+
+                        tokd_labels = output_w_wm_bs.clone().detach()
+                        attention_masks = (output_w_wm_bs != tokenizer.pad_token_id).long()
+                        tokd_labels[:,:prefix_len+1] = -100 
+                        output = model_ppl(output_w_wm_bs, attention_mask=attention_masks, labels=tokd_labels).loss
+                        ppl_list['wm_bs'].append(torch.mean(output).item())
+
+                        attention_masks = torch.ones_like(output_w_wm_bs[:, (prefix_len-5):]) # should all be 1, since we set the new_token = 200
+                        embed_wm_bs = model_simcse(output_w_wm_bs[:, (prefix_len-5):], attention_mask=attention_masks, output_hidden_states=True, return_dict=True).pooler_output
+                        embed_no_wm = embed_no_wm_list[step*args.batch_size:(step+1)*args.batch_size] 
+                        cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
+                    
+                # decoded_output_no_wm = tokenizer.batch_decode(output_no_wm[:,prefix_len:], skip_special_tokens=True)
+                decoded_output_w_wm_bs = tokenizer.batch_decode(output_w_wm_bs[:,prefix_len:], skip_special_tokens=True)
+
                 ########### Detection ###########
                 for idx in range(args.batch_size):
                     with torch.no_grad():
                         with autocast():
-                            if args.human:
-                                entropy_cur = [0] + entropy_human[idx][:-1]
-                                generated_ids = human_full_ids[idx,prefix_len:]
-                                dict_key = 'human_bs'
-                                high_ent_tokens = [val for val in entropy_cur if val > 2.33]
-                                # If len(high_ent_tokens) is too small, we are more likely to get a high z-score for human text
-                                # This might lead to a low TPR w.r.t. FPR = 0% / 1%. 
-                                # So skip the human text with too few high_ent_tokens.
-                                # This skip 3 samples, and 497 samples are left.
-                                if len(high_ent_tokens) < 30:
-                                    skip_cnt += 1
-                                    continue
-                            else:
-                                entropy_cur = [0] + entropy_wm[idx][:-1]
-                                generated_ids = output_w_wm_bs[idx,prefix_len:]
-                                dict_key = 'wm_bs'
-
-                            # Directly use token_ids instead of text for detection 
-                            detection_result, _ = detect(generated_ids, 
+                            wm_detection_result_bs, _ = detect(decoded_output_w_wm_bs[idx], 
                                                                     args, 
-                                                                    entropy = entropy_cur,
-                                                                    entropy_threshold = 2.33,
                                                                     embed_matrix=embed_matrix,
                                                                     device=device, 
                                                                     tokenizer=tokenizer,
                                                                     use_ckpt=False,
                                                                     gamma=args.gamma,
                                                                     delta=args.delta)
-                            z_score_list[dict_key].append(float(detection_result[3][1]))
-                    if not args.human:
-                        simcse_list['wm_bs'].append(cos(embed_wm_bs[idx], embed_no_wm[idx]).item()) 
-            if args.human:
-                cur_result['human_bs'] = {}
+                            
+                            z_score_list['wm_bs'].append(float(wm_detection_result_bs[3][1]))
 
-                print("="*term_width)
-                z_score_list['human_bs'] = sorted(z_score_list['human_bs'])[::-1]
-                thres_0 = z_score_list['human_bs'][0] + 0.001
-                thres_1 = z_score_list['human_bs'][5] + 0.001
-                thres_4 = z_score_list['human_bs'][20] + 0.001
-                thres_5 = z_score_list['human_bs'][25] + 0.001
-                thres_10 = z_score_list['human_bs'][50] + 0.001
-                cur_result['human_bs']['z'] = {
-                        'avg': statistics.mean(z_score_list['human_bs']),
-                        'stdev': statistics.stdev(z_score_list['human_bs']),
-                        'total': len(z_score_list['human_bs']),
-                        'skip': skip_cnt,
-                        'max': max(z_score_list['human_bs']),
-                        'thres_0': thres_0,
-                        'thres_1': thres_1,
-                        'thres_4': thres_4,
-                        'thres_5': thres_5,
-                        'thres_10': thres_10,
-                        'full': z_score_list['human_bs']
-                    }
-            else:
-                human_json = json.load(open(f"eval/opt/bs_{args.split}/human/sweet_{args.gamma}.json"))
-                cur_result['wm_bs'] = {}
-                cur_result['human_bs'] = human_json['setting_'+str(setting)]['human_bs']
+                    simcse_list['wm_bs'].append(cos(embed_wm_bs[idx], embed_no_wm[idx]).item())
+                    
+            cur_result['wm_bs'] = {}
+            cur_result['human_bs'] = human_json['setting_'+str(setting)]['human_bs']
 
-                thres_0 = cur_result['human_bs']['z']['thres_0']
-                thres_1 = cur_result['human_bs']['z']['thres_1']
-                thres_4 = cur_result['human_bs']['z']['thres_4']
-                thres_5 = cur_result['human_bs']['z']['thres_5']
-                thres_10 = cur_result['human_bs']['z']['thres_10']
+            thres_0 = cur_result['human_bs']['z']['thres_0']
+            thres_1 = cur_result['human_bs']['z']['thres_1']
+            thres_4 = cur_result['human_bs']['z']['thres_4']
+            thres_5 = cur_result['human_bs']['z']['thres_5']
+            thres_10 = cur_result['human_bs']['z']['thres_10']
 
-                cur_result['wm_bs']['z'] = {
-                        'avg': statistics.mean(z_score_list['wm_bs']),
-                        'stdev': statistics.stdev(z_score_list['wm_bs']),
-                        'total': len(z_score_list['wm_bs']),
-                        'thres_0': sum([1 for val in z_score_list['wm_bs'] if val > thres_0]),
-                        'thres_1': sum([1 for val in z_score_list['wm_bs'] if val > thres_1]),
-                        'thres_4': sum([1 for val in z_score_list['wm_bs'] if val > thres_4]),
-                        'thres_5': sum([1 for val in z_score_list['wm_bs'] if val > thres_5]),
-                        'thres_10': sum([1 for val in z_score_list['wm_bs'] if val > thres_10]),
-                        'full': sorted(z_score_list['wm_bs'])[::-1]
-                    }
-                print("="*term_width)
-                cur_result['wm_bs']['simcse'] = statistics.mean(simcse_list['wm_bs'])
-                cur_result['wm_bs']['ppl'] = math.exp(statistics.mean(ppl_list['wm_bs']))
+            cur_result['wm_bs']['z'] = {
+                    'avg': statistics.mean(z_score_list['wm_bs']),
+                    'stdev': statistics.stdev(z_score_list['wm_bs']),
+                    'total': len(z_score_list['wm_bs']),
+                    'thres_0': sum([1 for val in z_score_list['wm_bs'] if val > thres_0]),
+                    'thres_1': sum([1 for val in z_score_list['wm_bs'] if val > thres_1]),
+                    'thres_4': sum([1 for val in z_score_list['wm_bs'] if val > thres_4]),
+                    'thres_5': sum([1 for val in z_score_list['wm_bs'] if val > thres_5]),
+                    'thres_10': sum([1 for val in z_score_list['wm_bs'] if val > thres_10]),
+                    'full': sorted(z_score_list['wm_bs'])[::-1]
+                }
+            print("="*term_width)
+            cur_result['wm_bs']['simcse'] = statistics.mean(simcse_list['wm_bs'])
+            cur_result['wm_bs']['ppl'] = math.exp(statistics.mean(ppl_list['wm_bs']))
 
-            json_result['setting_'+str(setting)] = cur_result   
-        
+            json_result['setting_'+str(setting)] = cur_result
+    
         if args.load_fp16:
             name_fp16 = 'half'
         else:
             name_fp16 = 'full' 
-        
-        if args.human:
-            with open(f"eval/opt/bs_{args.split}/human/sweet_{args.gamma}.json", "w") as outfile:
-                outfile.write(json.dumps(json_result, indent=4))
-        else:
-            with open(f"eval/opt/bs_{args.split}/{name_fp16}/sweet_{args.gamma}_{args.delta}.json", "w") as outfile:
-                outfile.write(json.dumps(json_result, indent=4))
+        with open(f"eval/opt/bs_{args.split}/{name_fp16}/entr_{args.gamma}_{args.delta}.json", "w") as outfile:
+            outfile.write(json.dumps(json_result, indent=4))
 
     return 
 
@@ -543,12 +476,6 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run watermarked huggingface LM generation pipeline"
-    )
-    parser.add_argument(
-        "--human",
-        type=str2bool,
-        default=True,
-        help="Get human-written text evaluation or watermarked machine text evaluation.",
     )
     parser.add_argument(
         "--model_name_or_path",
@@ -698,12 +625,6 @@ if __name__ == "__main__":
         "--use_sampling",
         type=str2bool,
         default=True,
-        help=("Whether to perform sampling during generation. (non-greedy decoding)"),
-    )
-    parser.add_argument(
-        "--provide_prompt",
-        type=str2bool,
-        default=False,
         help=("Whether to perform sampling during generation. (non-greedy decoding)"),
     )
     parser.add_argument(

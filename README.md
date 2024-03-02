@@ -27,8 +27,14 @@ Check ArXiv paper [here](https://arxiv.org/abs/2402.18059).
 * Ours
   * `CUDA_VISIBLE_DEVICES=0 python inference.py --split=test --batch_size=20`
 * SWEET
-  * The experiments are conducted when prompts are **not available** during detection, so we compute z-score over all generated tokens.
-  * `CUDA_VISIBLE_DEVICES=0 python inference_sweet.py --split=test --batch_size=20`
+  * Note that the detection of SWEET watermark requires knowing the prompts.
+  * Evaluation on human-written text 
+    `CUDA_VISIBLE_DEVICES=0 python inference_sweet.py --split=test --batch_size=20 --human=True`
+  * Evaluation on watermarked machine-generated text 
+    `CUDA_VISIBLE_DEVICES=0 python inference_sweet.py --split=test --batch_size=20 --human=False`
+* Entropy
+  * Applying the same generation algorithm as SWEET, but doesn't need prompts during detection. This is achieved by computing z-score over all generated tokens instead of high-entropy tokens.
+  * `CUDA_VISIBLE_DEVICES=0 python inference_entropy.py --split=test --batch_size=20` 
 
 ### Ablation Study: Weighted Sum
 * Ours
