@@ -72,3 +72,14 @@ Check ArXiv paper [here](https://arxiv.org/abs/2402.18059).
 * Figure 4: [pos_tag/delta_gamma_analysis.ipynb](pos_tag/delta_gamma_analysis.ipynb)
 * Figure 5: [dipper/result.ipynb](dipper/result.ipynb)
 * Figure 6: [cp_att/result.ipynb](cp_att/result.ipynb)
+
+### Citation
+If you're using this work in your research or applications, please cite using this BibTeX:
+```
+@article{huo2024token,
+  title={Token-Specific Watermarking with Enhanced Detectability and Semantic Coherence for Large Language Models},
+  author={Huo, Mingjia and Somayajula, Sai Ashish and Liang, Youwei and Zhang, Ruisi and Koushanfar, Farinaz and Xie, Pengtao},
+  journal={arXiv preprint arXiv:2402.18059},
+  year={2024}
+}
+```
