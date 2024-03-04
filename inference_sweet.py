@@ -71,7 +71,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 term_width = 80
 
-init_delta_list = [1.0, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5]
+init_delta_list = [1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.3, 2.4, 2.5, 2.7, 2.9, 3.0]
 init_gamma_list = [0.25] * len(init_delta_list) 
 
 def format_names(s):
@@ -438,7 +438,7 @@ def main(args):
                         probs = torch.softmax(output_human.logits, dim=-1)
                         entropy_human = -torch.where(probs > 0, probs * probs.log(), probs.new([0.0])).sum(dim=-1)
                         entropy_human = entropy_human[:, -200:].cpu().tolist()
-  
+                  
                 ########### Detection ###########
                 for idx in range(args.batch_size):
                     with torch.no_grad():
