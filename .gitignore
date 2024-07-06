@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+/old/
+/eval_old/
 
 # C extensions
 *.so
