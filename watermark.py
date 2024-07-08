@@ -144,12 +144,6 @@ def main(args):
                                 **sample,
                                 logits_processor=LogitsProcessorList([watermark_processor]))
                 
-                tokd_labels = output_w_wm.clone().detach()
-                attention_masks = (output_w_wm != tokenizer.pad_token_id).long()
-                tokd_labels[:,:prefix_len+1] = -100 
-                output = model_ppl(output_w_wm, attention_mask=attention_masks, labels=tokd_labels).loss
-                ppl_list.append(torch.mean(output).item())
-                
                 decoded_output_no_wm = tokenizer.batch_decode(output_no_wm[:,prefix_len:], skip_special_tokens=True)
                 decoded_output_w_wm = tokenizer.batch_decode(output_w_wm[:,prefix_len:], skip_special_tokens=True)                    
         
