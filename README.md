@@ -12,7 +12,7 @@ We introduce a novel watermarking method for large language models (LLMs), focus
 
 These metrics are controlled by two hyperparameters: the split ratio ($\gamma$) and watermark logit ($\delta$). These values are adjusted for different tokens to account for their unique characteristics.
 
-To determine token-specific values for $\gamma$ and $\delta$, we use two lightweight networks: the $\gamma$-generator ($G_\gamma$) and the $\delta$-generator ($G_\delta$). These networks are optimized using a specialized multi-objective optimization framework. Below is an overview of our proposed method:
+To determine token-specific values for $\gamma$ and $\delta$, we use two lightweight networks: the $\gamma$-generator ($G_\gamma$) and the $\delta$-generator ($G_\delta$). These networks are optimized using a specialized multi-objective optimization framework. Below is an overview of our proposed training method:
 
 ![overview](fig/workflow.png)
 
