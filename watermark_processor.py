@@ -1,19 +1,3 @@
-# coding=utf-8
-# Copyright 2023 Authors of "A Watermark for Large Language Models"
-# available at https://arxiv.org/abs/2301.10226
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import annotations
 import collections
 from math import sqrt
@@ -30,7 +14,7 @@ from nltk.util import ngrams
 
 from utils.normalizers import normalization_strategy_lookup
 
-from generator import DeltaNetwork, GammaNetwork
+from utils.TS_networks import DeltaNetwork, GammaNetwork
 
 class WatermarkBase:
     def __init__(
@@ -39,28 +23,26 @@ class WatermarkBase:
         seeding_scheme: str = "simple_1",  # mostly unused/always default
         hash_key: int = 15485863,  # just a large prime number to create a rng seed with sufficient bit width
         embed_matrix: torch.FloatTensor = torch.empty(1).cuda(),
-        batch_size: int = 1,
         ckpt_path: str = '',
-        use_ckpt: bool = True,
         gamma: float = 0.5,
         delta: float = 2.0,
     ):
-
         # watermarking parameters
         self.vocab = vocab
-        self.vocab_size = 50272
         self.seeding_scheme = seeding_scheme
         self.rng = None
         self.hash_key = hash_key
-        self.use_ckpt = use_ckpt
+        self.ckpt_path = ckpt_path
+        device = embed_matrix.device
+        self.vocab_size = 50272
 
-        if use_ckpt:
+        if len(ckpt_path) > 0:
             checkpoint = torch.load(ckpt_path)
             layer_delta = sum(1 for key in checkpoint['delta_state_dict'] if "weight" in key)  # Counting only weight keys as layers
             layer_gamma = sum(1 for key in checkpoint['gamma_state_dict'] if "weight" in key)  # Counting only weight keys as layers
 
-            self.gamma_network = GammaNetwork(input_dim=embed_matrix.shape[1], layers=layer_gamma).cuda()
-            self.delta_network = DeltaNetwork(input_dim=embed_matrix.shape[1], layers=layer_delta).cuda()
+            self.gamma_network = GammaNetwork(input_dim=embed_matrix.shape[1], layers=layer_gamma).to(device)
+            self.delta_network = DeltaNetwork(input_dim=embed_matrix.shape[1], layers=layer_delta).to(device)
 
             self.delta_network.load_state_dict(checkpoint['delta_state_dict'])
             self.gamma_network.load_state_dict(checkpoint['gamma_state_dict'])
@@ -71,15 +53,13 @@ class WatermarkBase:
                 param.requires_grad = False
             self.delta_network.eval()
             self.gamma_network.eval()
-
-            # print(self.gamma_network.gamma.weight)
-            # print(self.gamma_network.delta.weight)
+            
         else:
-            self.gamma = torch.tensor([gamma]).cuda()
-            self.delta = torch.tensor([delta]).cuda()
+            self.gamma = torch.tensor([gamma]).to(device)
+            self.delta = torch.tensor([delta]).to(device)
 
-        self.gamma_list = torch.empty(0, dtype=torch.float).cuda()
-        self.delta_list = torch.empty(0, dtype=torch.float).cuda()
+        self.gamma_list = torch.empty(0, dtype=torch.float).to(device)
+        self.delta_list = torch.empty(0, dtype=torch.float).to(device)
         self.embed_matrix = embed_matrix
 
     def _seed_rng(self, input_ids: torch.LongTensor, seeding_scheme: str = None) -> None:
@@ -97,10 +77,13 @@ class WatermarkBase:
         return
 
     def _get_greenlist_ids(self, input_ids: torch.LongTensor) -> list[int]:
+        # Always use ids given by OPT model
+        # since our gamma/delta network is trained on the embedding matrix of OPT model
+       
         # seed the rng using the previous tokens/prefix according to the seeding_scheme
         self._seed_rng(input_ids)
         
-        if self.use_ckpt:
+        if len(self.ckpt_path) > 0:
             gamma = self.gamma_network(self.embed_matrix[input_ids[-1].item()])
             delta = self.delta_network(self.embed_matrix[input_ids[-1].item()])
         else:
@@ -119,8 +102,15 @@ class WatermarkBase:
 
 
 class WatermarkLogitsProcessor(WatermarkBase, LogitsProcessor):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, 
+                tokenizer_llama: Tokenizer=None,
+                tokenizer_opt: Tokenizer=None,
+                **kwargs):
         super().__init__(*args, **kwargs)
+        self.tokenizer_llama = tokenizer_llama
+        self.tokenizer_opt = tokenizer_opt
+        if self.tokenizer_llama is not None:
+            self.vocab_size = len(self.tokenizer_llama)
 
     def _calc_greenlist_mask(self, logits: torch.FloatTensor, greenlist_token_ids) -> torch.BoolTensor:
         green_tokens_mask = torch.zeros_like(logits)
@@ -134,8 +124,16 @@ class WatermarkLogitsProcessor(WatermarkBase, LogitsProcessor):
         if self.rng is None:
             self.rng = torch.Generator(device=device)
 
+        if self.tokenizer_llama is not None: # only run this part if test on LLAMA model.
+            llama_str = self.tokenizer_llama.batch_decode(input_ids[:,-5:], add_special_tokens=False)
+            ids_opt = self.tokenizer_opt(llama_str, add_special_tokens=False)['input_ids']
+
         for b_idx in range(input_ids.shape[0]):
-            greenlist_ids, gamma, delta = self._get_greenlist_ids(input_ids[b_idx])
+            if self.tokenizer_llama is not None:
+                greenlist_ids, gamma, delta = self._get_greenlist_ids(torch.tensor(ids_opt[b_idx]).to(device))
+            else:                
+                greenlist_ids, gamma, delta = self._get_greenlist_ids(input_ids[b_idx])
+
             green_tokens_mask = self._calc_greenlist_mask(logits=scores[b_idx], greenlist_token_ids=greenlist_ids)
             scores[b_idx][green_tokens_mask] = scores[b_idx][green_tokens_mask] + delta.half()
         
@@ -147,7 +145,8 @@ class WatermarkDetector(WatermarkBase):
         self,
         *args,
         device: torch.device = None,
-        tokenizer: Tokenizer = None,
+        tokenizer_opt: Tokenizer = None,
+        tokenizer_llama: Tokenizer = None,
         z_threshold: float = 4.0,
         normalizers: list[str] = ["unicode"],  # or also: ["unicode", "homoglyphs", "truecase"]
         ignore_repeated_bigrams: bool = True,
@@ -156,9 +155,14 @@ class WatermarkDetector(WatermarkBase):
         super().__init__(*args, **kwargs)
         # also configure the metrics returned/preprocessing options
         assert device, "Must pass device"
-        assert tokenizer, "Need an instance of the generating tokenizer to perform detection"
+        assert tokenizer_opt, "Need an instance of the generating tokenizer to perform detection"
 
-        self.tokenizer = tokenizer
+        self.tokenizer_opt = tokenizer_opt
+        self.tokenizer_llama = tokenizer_llama
+        
+        if self.tokenizer_llama is not None:
+            self.vocab_size = len(self.tokenizer_llama)
+
         self.device = device
         self.z_threshold = z_threshold
         self.rng = torch.Generator(device=self.device)
@@ -231,7 +235,16 @@ class WatermarkDetector(WatermarkBase):
             green_token_count, green_token_mask = 0, []
             for idx in range(self.min_prefix_len, len(input_ids)):
                 curr_token = input_ids[idx]
-                greenlist_ids, gamma, delta = self._get_greenlist_ids(input_ids[:idx])
+                # greenlist_ids, gamma, delta = self._get_greenlist_ids(input_ids[:idx])
+                if self.tokenizer_llama is None:
+                    greenlist_ids, gamma, delta = self._get_greenlist_ids(input_ids[:idx])
+                else:
+                    llama_str = self.tokenizer_llama.decode(input_ids[max(idx-5, 0):idx], add_special_tokens=False)
+                    ids_opt = self.tokenizer_opt(llama_str, add_special_tokens=False)['input_ids']
+                    if len(ids_opt) == 0:
+                        continue
+                    greenlist_ids, gamma, delta = self._get_greenlist_ids(torch.tensor(ids_opt).to(self.device))
+                
                 # print(input_ids, curr_token, greenlist_ids)
                 # exit()
                 if curr_token in greenlist_ids:
@@ -280,17 +293,24 @@ class WatermarkDetector(WatermarkBase):
             print(f"Text after normalization:\n\n{text}\n")
 
         if tokenized_text is None:
-            assert self.tokenizer is not None, (
-                "Watermark detection on raw string ",
-                "requires an instance of the tokenizer ",
-                "that was used at generation time.",
-            )
-            tokenized_text = self.tokenizer(text, return_tensors="pt", add_special_tokens=False)["input_ids"][0].to(self.device)
-            if tokenized_text[0] == self.tokenizer.bos_token_id:
-                tokenized_text = tokenized_text[1:]
+            if self.tokenizer_llama is not None:
+                tokenized_text = self.tokenizer_llama(text, return_tensors="pt", add_special_tokens=False)["input_ids"][0].to(self.device)
+                if tokenized_text[0] == self.tokenizer_llama.bos_token_id:
+                    tokenized_text = tokenized_text[1:]
+            else:
+                assert self.tokenizer_opt is not None, (
+                    "Watermark detection on raw string ",
+                    "requires an instance of the tokenizer_opt ",
+                    "that was used at generation time.",
+                )
+                tokenized_text = self.tokenizer_opt(text, return_tensors="pt", add_special_tokens=False)["input_ids"][0].to(self.device)
+                if tokenized_text[0] == self.tokenizer_opt.bos_token_id:
+                    tokenized_text = tokenized_text[1:]
         else:
             # try to remove the bos_tok at beginning if it's there
-            if (self.tokenizer is not None) and (tokenized_text[0] == self.tokenizer.bos_token_id):
+            if (self.tokenizer_llama is not None) and (tokenized_text[0] == self.tokenizer_llama.bos_token_id):
+                tokenized_text = tokenized_text[1:]
+            elif (self.tokenizer_opt is not None) and (tokenized_text[0] == self.tokenizer_opt.bos_token_id):
                 tokenized_text = tokenized_text[1:]
 
         # call score method

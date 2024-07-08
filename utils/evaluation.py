@@ -19,14 +19,7 @@ import numpy as np
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, LlamaTokenizer
 from utils.generation import tokenize_and_truncate, collate_batch
-from metrics.repetition_diversity import (
-    measure_repetition_and_diversity,
-    dummy_rep_div_result,
-)
-from metrics.p_sp import evaluate_p_sp
-from metrics.detect_retrieval import detect_retrieval
-from metrics.coherence import get_coherence_score
-from metrics.mauve import get_mauve_score
+
 from utils.hypothesis_testing import (
     chi_squared_runs_test,
     F_succ_T_runs_dummy_dict_w_bins,
@@ -53,6 +46,37 @@ NO_CHECK_ARGS = [
     "max_prefix_length",
 ]
 
+def format_names(s):
+    """Format names for the gradio demo interface"""
+    s=s.replace("num_tokens_scored","Tokens Counted (T)")
+    s=s.replace("num_green_tokens","# Tokens in Greenlist")
+    s=s.replace("green_fraction","Fraction of T in Greenlist")
+    s=s.replace("z_score","z-score")
+    s=s.replace("p_value","p value")
+    s=s.replace("prediction","Prediction")
+    s=s.replace("confidence","Confidence")
+    return s
+
+def list_format_scores(score_dict, detection_threshold):
+    """Format the detection metrics into a gradio dataframe input format"""
+    lst_2d = []
+    # lst_2d.append(["z-score threshold", f"{detection_threshold}"])
+    for k,v in score_dict.items():
+        if k=='green_fraction': 
+            lst_2d.append([format_names(k), f"{v:.1%}"])
+        elif k=='confidence': 
+            lst_2d.append([format_names(k), f"{v:.3%}"])
+        elif isinstance(v, float): 
+            lst_2d.append([format_names(k), f"{v:.3g}"])
+        elif isinstance(v, bool):
+            lst_2d.append([format_names(k), ("Watermarked" if v else "Human/Unwatermarked")])
+        else: 
+            lst_2d.append([format_names(k), f"{v}"])
+    if "confidence" in score_dict:
+        lst_2d.insert(-2,["z-score Threshold", f"{detection_threshold}"])
+    else:
+        lst_2d.insert(-1,["z-score Threshold", f"{detection_threshold}"])
+    return lst_2d
 
 def conditional_no_check_args(no_check_args, evaluation_metrics, args):
     if "ppl" not in evaluation_metrics:

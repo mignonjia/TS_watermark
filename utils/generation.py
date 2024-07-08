@@ -40,8 +40,6 @@ from .data.cnndm import load_cnndm
 MAX_GENERATIONS = int(10000)  # Hardcoded max length to avoid infinite loop
 access_token = "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"
 
-import torch
-import torch.nn.functional as F
 
 
 def gumbel_softmax(logits, tau=1, hard=False, eps=1e-10, dim=-1):
@@ -236,13 +234,14 @@ def load_hf_dataset(args):
             dataset_config_name,
             split=args.dataset_split,
             streaming=args.stream_dataset,
+            trust_remote_code=True,
         )
         if "c4" in dataset_name:
             args.__dict__.update(
                 {
                     "truncate_input_for_prompt": True,
                     "input_col_name": "text",
-                    "ref_output_col_name": None,
+                    "ref_output_col_name": None
                 }
             )
             args.columns_to_remove = list(

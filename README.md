@@ -1,80 +1,73 @@
-Code for **Token-Specific Watermarking with Enhanced Detectability and Semantic Coherence for Large Language Models**.
 
-Check ArXiv paper [here](https://arxiv.org/abs/2402.18059).
+# Token-Specific Watermarking with Enhanced Detectability and Semantic Coherence for Large Language Models
+
+This repository contains the code for our ICML 2024 paper on **Token-Specific Watermarking with Enhanced Detectability and Semantic Coherence for Large Language Models**. You can read the full paper [here](https://arxiv.org/abs/2402.18059).
+
+## Introduction
+
+We introduce a novel watermarking method for large language models (LLMs), focusing on two primary objectives: 
+
+- **Detectability**: Measured by the z-score.
+- **Semantic Coherence**: Assessed by the cosine similarity between the embeddings of watermarked and non-watermarked texts.
+
+These metrics are controlled by two hyperparameters: the split ratio ($\gamma$) and watermark logit ($\delta$). These values are adjusted for different tokens to account for their unique characteristics.
+
+To determine token-specific values for $\gamma$ and $\delta$, we use two lightweight networks: the $\gamma$-generator ($G_\gamma$) and the $\delta$-generator ($G_\delta$). These networks are optimized using a specialized multi-objective optimization framework. Below is an overview of our proposed method:
+
+![overview](fig/wm_workflow.png)
 
 ## Environment Setup
-* Our code follows the setup of [KGW](https://github.com/jwkirchenbauer/lm-watermarking/tree/main/). 
-* Make sure the packages in `requirements.txt` are installed in your environment.
-* Also, in the training and inference files, change the model paths (`facebook/opt-1.3b`, `princeton-nlp/sup-simcse-roberta-base`, `meta-llama/Llama-2-7b-hf`) to your desired paths.
 
-## Train 
-  * `bash run_pipeline.sh`
-  * Choose from MOO or Weighted Sum to train the network
-    * If MOO, `log_z_score=False, z_score_factor=1.0`
-    * If Weighted Sum, `log_z_score=False, z_score_factor=4e-4`
+Ensure that all packages listed in `requirements.txt` are installed in your environment.
+
+## Demo
+
+For a quick start, refer to `demo.ipynb`. This notebook generates watermarked text from a given prompt and computes the z-score, PPL, and SimCSE.
+
+## Training
+
+To train the network, run the following command:
+```
+bash run_pipeline.sh
+```
+
+Select between Multi-Objective Optimization (MOO) or Weighted Sum for training:
+- For MOO: `z_score_factor=1.0`
+- For Weighted Sum: `z_score_factor=4e-4`
 
 ## Evaluation
-### Default setting for all evaluation
-  * Multinomial sampling with temp=1.0
-  * Dataset: C4 realnewslike official validation split from Hugging Face, and we loaded it and split it into our validation and test set. The default split is the test split.
-  * 500 samples
-  * generation length = 200 tokens
 
-### OPT-1.3b evaluation
-* Results stored in `eval/opt` by default
-* KGW
-  * `CUDA_VISIBLE_DEVICES=0 python inference_bs.py --split=test --batch_size=20`
-* Ours
-  * `CUDA_VISIBLE_DEVICES=0 python inference.py --split=test --batch_size=20`
-* SWEET
-  * Evaluation on human-written text 
-    `CUDA_VISIBLE_DEVICES=0 python inference_sweet.py --split=test --batch_size=20 --human=True`
-  * Evaluation on watermarked machine-generated text 
-    `CUDA_VISIBLE_DEVICES=0 python inference_sweet.py --split=test --batch_size=20 --human=False`
-  * SWEET_no_prompt
-    * Applying the same generation algorithm as SWEET, but doesn't need prompts during detection. This is achieved by computing entropy simply over the generated text instead of prompt and generated text.
-    * Run experiments by replacing the above `inference_sweet.py` with `inference_sweet_no_prompt.py`
+### Default Settings
 
-### Ablation Study: Weighted Sum
-* Ours
-  * `CUDA_VISIBLE_DEVICES=0 python inference_weighted.py --split=test --batch_size=20`
+- **LLM**: OPT-1.7B 
+- **Sampling**: Multinomial sampling with temperature=1.0, top_k=50
+- **Dataset**: C4 realnewslike official validation split from Hugging Face. It is further divided into our validation and test sets, with the test split as the default.
+- **Sample Generation**: 500 prompts, with each generates 200 tokens.
+- **Batch Size**: Default is 20, requiring approximately 30GB of GPU memory for OPT-1.7B model.
 
-### Dipper Attack
-* KGW
-  * `CUDA_VISIBLE_DEVICES=0 python inference_bs_dipper_get_text.py --split=test --batch_size=20`
-  Get baseline generation text
-  * Then use [Dipper](https://github.com/martiansideofthemoon/ai-detection-paraphrases0) to get paraphrase text
-  * `CUDA_VISIBLE_DEVICES=0 python inference_bs_dipper_text_eval.py --split=test --batch_size=20`
-  Evaluation on the paraphase text
-* Ours
-  * `CUDA_VISIBLE_DEVICES=0 python inference_dipper_get_text.py --split=test --batch_size=20`
-  Get generation text using our watermarking method
-  * Then use [Dipper](https://github.com/martiansideofthemoon/ai-detection-paraphrases0) to get paraphrase text
-  * `CUDA_VISIBLE_DEVICES=0 python inference_dipper_text_eval.py --split=test --batch_size=20`
-  Evaluation on the paraphase text
+### Configuration File
 
-### Copy_Paste Attack
-* change `num_cp_split=1` or `num_cp_split=3` for two settings
-* KGW
-  * `CUDA_VISIBLE_DEVICES=0 python inference_bs_cp_att.py --split=test --batch_size=20 --num_cp_split=1`
-* Ours
-  * `CUDA_VISIBLE_DEVICES=0 python inference_cp_att.py --split=test --batch_size=20 --num_cp_split=1`
+To modify default settings, check the [config](config) folder. For details on each keyword, refer to [config/README.md](config/README.md). 
 
-### LLAMA-2 evaluation
-* Results stored in `eval/llama` by default
-* KGW
-  * `CUDA_VISIBLE_DEVICES=0 python inference_bs_llama.py --split=test --batch_size=20`
-* Ours
-  * `CUDA_VISIBLE_DEVICES=0 python inference_llama.py --split=test --batch_size=20`
+### Running Evaluation
 
-### Plotting the figures
-* Figure 2, 3, 7, 8, 9: [result_figures.ipynb](result_figures.ipynb)
-* Figure 4: [pos_tag/delta_gamma_analysis.ipynb](pos_tag/delta_gamma_analysis.ipynb)
-* Figure 5: [dipper/result.ipynb](dipper/result.ipynb)
-* Figure 6: [cp_att/result.ipynb](cp_att/result.ipynb)
+Results are stored in the `eval` folder by default.
 
-### Citation
-If you're using this work in your research or applications, please cite using this BibTeX:
+- **Our Method**:
+  ```
+  CUDA_VISIBLE_DEVICES=0 python watermark.py --config_file config/TS.yaml
+  ```
+    * **If testing on llama models**, in [config/TS.yaml](config/TS.yaml), change the `model_name_or_path` to the desired model or local location, and also change `ckpt_path` to be `ckpt/llama/init_0.25_1.75_default.pth`.
+    * Adjust watermark strength by using checkpoints trained from other initializations in `ckpt` folder.
+
+- **KGW**:
+  ```
+  CUDA_VISIBLE_DEVICES=0 python watermark.py --config_file config/KGW.yaml
+  ```
+
+## Citation
+
+If you use this work in your research or applications, please cite it as follows:
 ```
 @article{huo2024token,
   title={Token-Specific Watermarking with Enhanced Detectability and Semantic Coherence for Large Language Models},
