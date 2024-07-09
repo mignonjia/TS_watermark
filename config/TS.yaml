@@ -1,6 +1,5 @@
 general:
-  model_name_or_path: "facebook/opt-1.3b" # "meta-llama/Llama-2-7b-hf"
-  model_ppl: "facebook/opt-2.7b"
+  model_name_or_path: "facebook/opt-1.3b" # "/data1/mingjia/Llama-2-13b-hf" 
   model_simcse: "princeton-nlp/sup-simcse-roberta-base"
   load_fp16: true
   use_gpu: true
@@ -27,7 +26,6 @@ generation:
   use_sampling: true
   sampling_temp: 1.0
   top_k: 50
-  top_p: 1.0
   generation_seed: null
   batch_size: 20
 

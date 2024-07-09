@@ -1,5 +1,7 @@
 import os
 import argparse
+# os.environ['HF_HOME'] = "/data1/mingjia/cache/huggingface"
+# print(f"Current huggingface cache dir: {os.environ['HF_HOME']}")
 
 from functools import partial
 from tqdm import tqdm
@@ -15,8 +17,6 @@ import torch
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 from utils.data_loader import TrainValTestIterableDataset, CustomIterableDataset
-# os.environ['HF_HOME'] = "~/.cache/huggingface"
-# print(f"Current huggingface cache dir: {os.environ['HF_HOME']}")
 
 # better bool flag type for argparse
 from utils.submitit import str2bool

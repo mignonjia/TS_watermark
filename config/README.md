@@ -11,10 +11,6 @@ The YAML configuration file (`config.yaml`) defines the parameters for running t
 - **model_name_or_path**: Main model, path to pretrained model or model identifier from huggingface.co/models.
   - Type: `str`
   - Example: `facebook/opt-1.3b`
-
-- **model_name_or_path**: A larger model to compute PPL.
-  - Type: `str`
-  - Example: `facebook/opt-2.7b`
   
 - **model_simcse**: Model to compute SimCSE.
   - Type: `str`
@@ -110,10 +106,6 @@ The YAML configuration file (`config.yaml`) defines the parameters for running t
 - **top_k**: The top K to use when generating using top_k version of multinomial sampling.
   - Type: `int`
   - Example: `50`
-
-- **top_p**: The top P to use when generating using top_p version of sampling.
-  - Type: `float`
-  - Example: `1.0`
 
 - **generation_seed**: Seed for setting the torch rng prior to generation using any decoding scheme with randomness.
   - Type: `int`

@@ -5,8 +5,8 @@ import random
 import numpy as np
 
 ######## HF CACHE (LOAD BEFORE HF PACKAGES) ########
-os.environ['HF_HOME'] = "/data1/mingjia/cache/huggingface"
-print(f"Current huggingface cache dir: {os.environ['HF_HOME']}")
+# os.environ['HF_HOME'] = "/data1/mingjia/cache/huggingface"
+# print(f"Current huggingface cache dir: {os.environ['HF_HOME']}")
 
 import torch
 from transformers import AutoModel, OPTForCausalLM, AutoTokenizer, LogitsProcessorList
@@ -53,25 +53,24 @@ def main(args):
         embed_matrix = OPTForCausalLM.from_pretrained("facebook/opt-1.3b", torch_dtype=d_type, device_map="auto").to(device).get_input_embeddings().weight
         tokenizer_opt = AutoTokenizer.from_pretrained("facebook/opt-1.3b", padding_side="left")
         tokenizer = LlamaTokenizer.from_pretrained(args.model_name_or_path, padding_side="left")
-        model = LlamaForCausalLM.from_pretrained(args.model_name_or_path, torch_dtype=d_type).cuda()
+        model = LlamaForCausalLM.from_pretrained(args.model_name_or_path, torch_dtype=d_type).to(device)
         model.config.pad_token_id = tokenizer.pad_token_id = 0  # unk
         model.config.bos_token_id = 1
         model.config.eos_token_id = 2
+
+    if len(args.ckpt_path) > 0:
+        assert model_short_name in args.ckpt_path, "ckpt doesn't match the model."
 
     model.eval()
 
     model_simcse = AutoModel.from_pretrained(args.model_simcse, torch_dtype=d_type).to(device)
     model_simcse.eval()
 
-    model_ppl = OPTForCausalLM.from_pretrained(args.model_ppl, torch_dtype=d_type).to(device)
-    model_ppl.eval()
-
     for name, param in model.named_parameters():
         param.requires_grad = False
     for name, param in model_simcse.named_parameters():
         param.requires_grad = False
-    for name, param in model_ppl.named_parameters():
-        param.requires_grad = False
+    embed_matrix.requires_grad = False
 
     step = 0
     z_score_list = []
@@ -116,7 +115,6 @@ def main(args):
             sample = dict(
                 do_sample=True,
                 top_k=args.top_k,
-                top_p=args.top_p,
                 temperature=args.sampling_temp,
                 attention_mask=attention_masks,
                 min_new_tokens=args.max_new_tokens,
@@ -204,7 +202,7 @@ def main(args):
                     "z_wm": z_score,
                     "simcse": cos(embed_wm[idx], embed_no_wm[idx]).item(),
                 }
-                with open(f"{args.output_dir}/text_{args.scheme}_{model_short_name}_1.json_pp", "a") as f:
+                with open(f"{args.output_dir}/text_{args.scheme}_{model_short_name}.json_pp", "a") as f:
                     f.write(json.dumps(dd) + "\n")
     
 
@@ -229,7 +227,7 @@ def main(args):
         'simcse': statistics.mean(simcse_list),
     }
 
-    with open(f"{args.output_dir}/{args.scheme}_{model_short_name}_1.json", "w") as outfile:
+    with open(f"{args.output_dir}/{args.scheme}_{model_short_name}.json", "w") as outfile:
         outfile.write(json.dumps(results, indent=4))
 
     return 

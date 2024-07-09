@@ -43,7 +43,7 @@ Select between Multi-Objective Optimization (MOO) or Weighted Sum for training:
 - **Sampling**: Multinomial sampling with temperature=1.0, top_k=50
 - **Dataset**: C4 realnewslike official validation split from Hugging Face. It is further divided into our validation and test sets, with the test split as the default.
 - **Sample Generation**: 500 prompts, with each generates 200 tokens.
-- **Batch Size**: Default is 20, requiring approximately 40GB of GPU memory for OPT-1.7B model.
+- **Batch Size**: Default is 20, requiring approximately 25GB of GPU memory for OPT-1.7B model.
 
 To modify default settings, check the `config` folder. For details on each keyword, refer to `config/README.md`. 
 
