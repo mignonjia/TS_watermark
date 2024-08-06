@@ -34,6 +34,7 @@ class TrainValTestIterableDataset(IterableDataset):
     def __init__(self, data_source, total_size=6400, seed=None):
         self.data_source = data_source
         self.total_size = total_size
+        self.seed = seed
 
     def __iter__(self):
         if self.seed is not None:

@@ -255,7 +255,7 @@ def main(args):
     dataset_input_len_filtered = dataset_w_prompts.filter(input_check, batched=False)
 
     # Create instances for train, validation, and test sets
-    train_dataset = TrainValTestIterableDataset(dataset_input_len_filtered, split='train', seed=0)
+    train_dataset = TrainValTestIterableDataset(dataset_input_len_filtered, seed=0)
     train_dataset = CustomIterableDataset(train_dataset)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=data_collator)
     
