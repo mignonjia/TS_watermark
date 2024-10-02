@@ -392,10 +392,10 @@ def main(args):
 
                 print("simcse", statistics.mean(L_S_list_100))
                 print("z-score", statistics.mean(L_D_list_100))
-
-                L_S_list_100, L_D_list_100 = [], []
                 L_S_list.append(statistics.mean(L_S_list_100))
                 L_D_list.append(statistics.mean(L_D_list_100))
+
+                L_S_list_100, L_D_list_100 = [], []
 
                 checkpoint_path = f'{args.ckpt_dir}/checkpoint_len_{args.max_new_tokens}_{step_cnter}.pth'
 
