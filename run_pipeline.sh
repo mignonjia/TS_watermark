@@ -1,5 +1,5 @@
 RUN_NAME=fp16_training
-CKPT_DIR="ckpt/all_ckpts/demo"
+CKPT_DIR="ckpt"
 
 echo "Running training: $RUN_NAME"
 echo "CKPT Dir: $CKPT_DIR"
