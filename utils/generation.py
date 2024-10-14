@@ -233,7 +233,7 @@ def load_hf_dataset(args):
             dataset_name,
             dataset_config_name,
             split=args.dataset_split,
-            streaming=args.stream_dataset
+            streaming=args.stream_dataset,
             trust_remote_code=True, # comment this line out if receive error message
         )
         if "c4" in dataset_name:
