@@ -6,5 +6,4 @@ datasets
 transformers
 tokenizers
 accelerate
-simcse
 wandb
