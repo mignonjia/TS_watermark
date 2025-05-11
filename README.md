@@ -1,7 +1,7 @@
 
 # Token-Specific Watermarking with Enhanced Detectability and Semantic Coherence for Large Language Models
 
-**This repository has been archieved. Please refer to [MedMark](https://github.com/mignonjia/MedMark) for the newest version, where a larger model was used and a better Pareto frontier has been achieved.**
+**This repository has been archived. Please refer to [MedMark](https://github.com/mignonjia/MedMark) for the newest version, where a larger model was used and a better Pareto frontier has been achieved.**
 
 This repository contains the code for our ICML 2024 paper on **Token-Specific Watermarking with Enhanced Detectability and Semantic Coherence for Large Language Models**. You can read the full paper [here](https://arxiv.org/abs/2402.18059).
 
